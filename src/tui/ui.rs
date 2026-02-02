@@ -212,7 +212,7 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
         None => {
             let bindings: &[(&str, &str)] = match app.mode {
                 Mode::Normal if app.focus == Focus::Preview => &[("j/k", "scroll"), ("Tab", "toggle view"), ("Esc", "back"), (":", "command")],
-                Mode::Normal => &[("q", "quit"), ("/", "search"), (":", "command"), ("Tab", "tags")],
+                Mode::Normal => &[("Enter", "open"), ("c", "create"), ("/", "search"), (":", "cmd"), ("Tab", "tags")],
                 Mode::TagBrowse => &[("Enter", "filter"), ("Esc", "clear & back"), ("Tab", "notes"), (":", "command")],
                 Mode::Search => &[("Enter", "confirm"), ("Esc", "cancel")],
                 Mode::Command => &[("o", "open"), ("a", "add"), ("t", "tags"), ("s", "summarize"), ("Esc", "cancel")],

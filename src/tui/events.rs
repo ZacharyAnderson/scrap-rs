@@ -24,7 +24,7 @@ pub fn handle_key(
     }
 
     match &app.mode {
-        Mode::Normal => handle_normal(app, key),
+        Mode::Normal => handle_normal(app, key, terminal),
         Mode::TagBrowse => handle_tag_browse(app, key),
         Mode::Search => handle_search(app, key),
         Mode::Command => handle_command(app, key, terminal),
@@ -34,7 +34,7 @@ pub fn handle_key(
     }
 }
 
-fn handle_normal(app: &mut App, key: KeyEvent) -> Result<()> {
+fn handle_normal(app: &mut App, key: KeyEvent, terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>) -> Result<()> {
     match key.code {
         KeyCode::Char('q') => app.should_quit = true,
         KeyCode::Char('j') | KeyCode::Down => {
@@ -57,6 +57,14 @@ fn handle_normal(app: &mut App, key: KeyEvent) -> Result<()> {
         KeyCode::Char(':') => {
             app.mode = Mode::Command;
             app.status_message = None;
+        }
+        KeyCode::Char('c') => {
+            app.input_buffer.clear();
+            app.tags_buffer.clear();
+            app.mode = Mode::AddNoteName;
+        }
+        KeyCode::Enter => {
+            open_selected_note(app, terminal)?;
         }
         KeyCode::Esc => {
             clear_summary(app);

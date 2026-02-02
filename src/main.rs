@@ -50,6 +50,29 @@ enum Commands {
         /// Tags to add or remove
         tags: Vec<String>,
     },
+    /// Write a note from stdin (create or update)
+    Write {
+        /// Name of the note
+        name: String,
+        /// Tags for the note
+        tags: Vec<String>,
+    },
+    /// Read a note to stdout
+    Read {
+        /// Name of the note
+        name: String,
+    },
+    /// List note names to stdout
+    List {
+        /// Filter by tag
+        #[arg(long)]
+        tag: Option<String>,
+    },
+    /// Append stdin content to an existing note
+    Append {
+        /// Name of the note
+        name: String,
+    },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -67,5 +90,9 @@ fn main() -> anyhow::Result<()> {
             name,
             tags,
         }) => commands::edit_tag::run(&name, &tags, add, delete),
+        Some(Commands::Write { name, tags }) => commands::write::run(&name, &tags),
+        Some(Commands::Read { name }) => commands::read::run(&name),
+        Some(Commands::List { tag }) => commands::list::run(tag.as_deref()),
+        Some(Commands::Append { name }) => commands::append::run(&name),
     }
 }

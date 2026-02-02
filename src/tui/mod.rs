@@ -136,6 +136,7 @@ impl App {
                     true
                 } else {
                     note.title.to_lowercase().contains(&query)
+                        || note.note.to_lowercase().contains(&query)
                         || note.tags.iter().any(|t| t.to_lowercase().contains(&query))
                 }
             })
