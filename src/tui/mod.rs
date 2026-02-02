@@ -2,6 +2,8 @@ mod events;
 mod markdown;
 mod ui;
 
+use std::time::Instant;
+
 use anyhow::Result;
 use crossterm::{
     event::{self, KeyEventKind},
@@ -29,6 +31,13 @@ pub enum Mode {
 pub enum Focus {
     NoteList,
     TagPanel,
+    Preview,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum PreviewTab {
+    Note,
+    Summary,
 }
 
 #[derive(Clone)]
@@ -57,6 +66,9 @@ pub struct App {
     pub summary_content: Option<String>,
     pub summary_stale: bool,
     pub summary_force_regen: bool,
+    pub preview_tab: PreviewTab,
+    pub preview_scroll: u16,
+    pub status_expires: Option<Instant>,
 }
 
 impl App {
@@ -84,6 +96,9 @@ impl App {
             summary_content: None,
             summary_stale: false,
             summary_force_regen: false,
+            preview_tab: PreviewTab::Note,
+            preview_scroll: 0,
+            status_expires: None,
         }
     }
 
@@ -216,11 +231,21 @@ fn run_loop(
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
 ) -> Result<()> {
     loop {
+        // Clear expired status messages
+        if let Some(expires) = app.status_expires {
+            if Instant::now() >= expires {
+                app.status_message = None;
+                app.status_expires = None;
+            }
+        }
+
         terminal.draw(|f| ui::draw(f, app))?;
 
-        if let event::Event::Key(key) = event::read()? {
-            if key.kind == KeyEventKind::Press {
-                events::handle_key(app, key, terminal)?;
+        if event::poll(std::time::Duration::from_millis(250))? {
+            if let event::Event::Key(key) = event::read()? {
+                if key.kind == KeyEventKind::Press {
+                    events::handle_key(app, key, terminal)?;
+                }
             }
         }
 

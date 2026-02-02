@@ -6,7 +6,9 @@ use crossterm::{
 };
 use ratatui::prelude::*;
 
-use super::{App, Focus, Mode};
+use std::time::{Duration, Instant};
+
+use super::{App, Focus, Mode, PreviewTab};
 use crate::db;
 use crate::llm;
 use crate::utils;
@@ -16,6 +18,11 @@ pub fn handle_key(
     key: KeyEvent,
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
 ) -> Result<()> {
+    // Preview focus is handled regardless of mode
+    if app.focus == Focus::Preview && app.mode == Mode::Normal {
+        return handle_preview(app, key);
+    }
+
     match &app.mode {
         Mode::Normal => handle_normal(app, key),
         Mode::TagBrowse => handle_tag_browse(app, key),
@@ -33,10 +40,12 @@ fn handle_normal(app: &mut App, key: KeyEvent) -> Result<()> {
         KeyCode::Char('j') | KeyCode::Down => {
             app.move_selection(1);
             clear_summary(app);
+            app.preview_scroll = 0;
         }
         KeyCode::Char('k') | KeyCode::Up => {
             app.move_selection(-1);
             clear_summary(app);
+            app.preview_scroll = 0;
         }
         KeyCode::Char('/') => {
             app.mode = Mode::Search;
@@ -70,6 +79,49 @@ fn clear_summary(app: &mut App) {
     app.summary_force_regen = false;
 }
 
+fn handle_preview(app: &mut App, key: KeyEvent) -> Result<()> {
+    match key.code {
+        KeyCode::Char('q') => app.should_quit = true,
+        KeyCode::Char('j') | KeyCode::Down => {
+            app.preview_scroll = app.preview_scroll.saturating_add(1);
+        }
+        KeyCode::Char('k') | KeyCode::Up => {
+            app.preview_scroll = app.preview_scroll.saturating_sub(1);
+        }
+        KeyCode::Tab => {
+            match app.preview_tab {
+                PreviewTab::Note => {
+                    if app.summary_content.is_some() || app.showing_summary {
+                        app.preview_tab = PreviewTab::Summary;
+                        app.preview_scroll = 0;
+                    } else {
+                        app.status_message = Some("No summary available. Use :s to generate.".to_string());
+                        app.status_expires = Some(Instant::now() + Duration::from_secs(3));
+                        app.focus = Focus::NoteList;
+                        app.preview_scroll = 0;
+                    }
+                }
+                PreviewTab::Summary => {
+                    app.focus = Focus::NoteList;
+                    app.preview_tab = PreviewTab::Note;
+                    app.preview_scroll = 0;
+                }
+            }
+        }
+        KeyCode::Esc => {
+            app.focus = Focus::NoteList;
+            app.preview_scroll = 0;
+        }
+        KeyCode::Char(':') => {
+            app.focus = Focus::NoteList;
+            app.mode = Mode::Command;
+            app.status_message = None;
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
 fn handle_tag_browse(app: &mut App, key: KeyEvent) -> Result<()> {
     match key.code {
         KeyCode::Char('q') => app.should_quit = true,
@@ -100,8 +152,9 @@ fn handle_tag_browse(app: &mut App, key: KeyEvent) -> Result<()> {
             app.status_message = None;
         }
         KeyCode::Tab => {
-            app.focus = Focus::NoteList;
+            app.focus = Focus::Preview;
             app.mode = Mode::Normal;
+            app.preview_scroll = 0;
         }
         KeyCode::Char(':') => {
             app.focus = Focus::NoteList;

@@ -3,7 +3,7 @@ use ratatui::{
     widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
 };
 
-use super::{markdown, App, Focus, Mode};
+use super::{markdown, App, Focus, Mode, PreviewTab};
 
 pub fn draw(f: &mut Frame, app: &App) {
     let chunks = Layout::default()
@@ -127,58 +127,73 @@ fn draw_tag_panel(f: &mut Frame, app: &App, area: Rect) {
 }
 
 fn draw_preview(f: &mut Frame, app: &App, area: Rect) {
-    if app.showing_summary {
-        let note_title = app
-            .selected_note()
-            .map(|n| n.title.clone())
-            .unwrap_or_default();
-        let title = if app.summary_stale {
-            format!("{} - Summary (outdated)", note_title)
-        } else {
-            format!("{} - Summary", note_title)
-        };
+    let note_title = app
+        .selected_note()
+        .map(|n| n.title.clone())
+        .unwrap_or_default();
 
-        let lines = match &app.summary_content {
-            Some(content) => markdown::render_markdown(content),
-            None => vec![Line::from("Generating summary...")],
-        };
+    let tab_label = match app.preview_tab {
+        PreviewTab::Note => "Note",
+        PreviewTab::Summary => "Summary",
+    };
 
-        let border_style = if app.summary_stale {
-            Style::default().fg(Color::Yellow)
-        } else {
-            Style::default().fg(Color::Green)
-        };
+    let is_focused = app.focus == Focus::Preview;
 
-        let paragraph = Paragraph::new(lines)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(title)
-                    .border_style(border_style),
-            )
-            .wrap(Wrap { trim: false });
-
-        f.render_widget(paragraph, area);
-        return;
-    }
-
-    let (title, lines) = match app.selected_note() {
-        Some(note) => {
-            let rendered = markdown::render_markdown(&note.note);
-            (note.title.clone(), rendered)
+    // Decide what content to show based on preview_tab
+    let (title, lines, border_style) = match app.preview_tab {
+        PreviewTab::Summary if app.summary_content.is_some() || app.showing_summary => {
+            let title = if app.summary_stale {
+                format!("{} [{}] (outdated)", note_title, tab_label)
+            } else {
+                format!("{} [{}]", note_title, tab_label)
+            };
+            let lines = match &app.summary_content {
+                Some(content) => markdown::render_markdown(content),
+                None => vec![Line::from("Generating summary...")],
+            };
+            let border = if is_focused {
+                Style::default().fg(Color::Cyan)
+            } else if app.summary_stale {
+                Style::default().fg(Color::Yellow)
+            } else {
+                Style::default().fg(Color::Green)
+            };
+            (title, lines, border)
         }
-        None => ("Preview".to_string(), vec![Line::from("No note selected")]),
+        _ => {
+            // Note tab (or Summary tab with no summary available — fall back to Note)
+            let (title, lines) = match app.selected_note() {
+                Some(note) => {
+                    let rendered = markdown::render_markdown(&note.note);
+                    (format!("{} [{}]", note.title, tab_label), rendered)
+                }
+                None => ("Preview".to_string(), vec![Line::from("No note selected")]),
+            };
+            let border = if is_focused {
+                Style::default().fg(Color::Cyan)
+            } else {
+                Style::default()
+            };
+            (title, lines, border)
+        }
     };
 
     let paragraph = Paragraph::new(lines)
-        .block(Block::default().borders(Borders::ALL).title(title))
-        .wrap(Wrap { trim: false });
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(title)
+                .border_style(border_style),
+        )
+        .wrap(Wrap { trim: false })
+        .scroll((app.preview_scroll, 0));
 
     f.render_widget(paragraph, area);
 }
 
 fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
     let (mode_text, mode_color) = match app.mode {
+        Mode::Normal if app.focus == Focus::Preview => (" PREVIEW ", Color::Cyan),
         Mode::Normal => (" NORMAL ", Color::Cyan),
         Mode::TagBrowse => (" TAGS ", Color::Yellow),
         Mode::Search => (" SEARCH ", Color::Yellow),
@@ -196,6 +211,7 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
         Some(msg) => vec![Span::raw(" "), Span::styled(msg.clone(), Style::default().fg(Color::Yellow))],
         None => {
             let bindings: &[(&str, &str)] = match app.mode {
+                Mode::Normal if app.focus == Focus::Preview => &[("j/k", "scroll"), ("Tab", "toggle view"), ("Esc", "back"), (":", "command")],
                 Mode::Normal => &[("q", "quit"), ("/", "search"), (":", "command"), ("Tab", "tags")],
                 Mode::TagBrowse => &[("Enter", "filter"), ("Esc", "clear & back"), ("Tab", "notes"), (":", "command")],
                 Mode::Search => &[("Enter", "confirm"), ("Esc", "cancel")],
