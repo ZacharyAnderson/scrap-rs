@@ -91,7 +91,17 @@ fn handle_preview(app: &mut App, key: KeyEvent) -> Result<()> {
         KeyCode::Tab => {
             match app.preview_tab {
                 PreviewTab::Note => {
-                    if app.summary_content.is_some() || app.showing_summary {
+                    // Try to load summary from DB if not already in memory
+                    if app.summary_content.is_none() {
+                        if let Some(note) = app.selected_note() {
+                            if let Ok(Some((summary, stale))) = db::get_summary(&app.conn, note.id) {
+                                app.summary_content = Some(summary);
+                                app.showing_summary = true;
+                                app.summary_stale = stale;
+                            }
+                        }
+                    }
+                    if app.summary_content.is_some() {
                         app.preview_tab = PreviewTab::Summary;
                         app.preview_scroll = 0;
                     } else {
