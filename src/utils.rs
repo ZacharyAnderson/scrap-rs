@@ -6,9 +6,6 @@ pub fn validate_name(name: &str) -> Result<()> {
     if trimmed.is_empty() {
         bail!("Note name cannot be empty.");
     }
-    if trimmed.contains(' ') {
-        bail!("Note name cannot contain spaces. Use hyphens or underscores instead.");
-    }
     if trimmed.contains('/') || trimmed.contains('\\') {
         bail!("Note name cannot contain path separators.");
     }
@@ -16,6 +13,12 @@ pub fn validate_name(name: &str) -> Result<()> {
         bail!("Note name cannot exceed 100 characters.");
     }
     Ok(())
+}
+
+fn sanitize_filename(name: &str) -> String {
+    name.chars()
+        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .collect()
 }
 
 pub fn validate_tags(tags: &[String]) -> Result<()> {
@@ -54,7 +57,8 @@ pub fn get_user_input(name: &str) -> Result<String> {
     let home = dirs::home_dir().context("Could not determine home directory")?;
     let temp_dir = home.join(".scrap/temp");
     std::fs::create_dir_all(&temp_dir)?;
-    let temp_file = temp_dir.join(format!("{}.md", name));
+    let safe_name = sanitize_filename(name);
+    let temp_file = temp_dir.join(format!("{}.md", safe_name));
 
     if !temp_file.exists() {
         std::fs::write(&temp_file, "")?;
@@ -79,7 +83,8 @@ pub fn get_user_input_with_contents(name: &str, existing: &str) -> Result<String
     let home = dirs::home_dir().context("Could not determine home directory")?;
     let temp_dir = home.join(".scrap/temp");
     std::fs::create_dir_all(&temp_dir)?;
-    let temp_file = temp_dir.join(format!("{}.md", name));
+    let safe_name = sanitize_filename(name);
+    let temp_file = temp_dir.join(format!("{}.md", safe_name));
 
     std::fs::write(&temp_file, existing)?;
 

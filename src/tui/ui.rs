@@ -5,7 +5,7 @@ use ratatui::{
 
 use super::{markdown, App, Focus, Mode, PreviewTab};
 
-pub fn draw(f: &mut Frame, app: &App) {
+pub fn draw(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(1), Constraint::Length(2)])
@@ -126,7 +126,7 @@ fn draw_tag_panel(f: &mut Frame, app: &App, area: Rect) {
     f.render_stateful_widget(list, area, &mut state);
 }
 
-fn draw_preview(f: &mut Frame, app: &App, area: Rect) {
+fn draw_preview(f: &mut Frame, app: &mut App, area: Rect) {
     let note_title = app
         .selected_note()
         .map(|n| n.title.clone())
@@ -178,6 +178,9 @@ fn draw_preview(f: &mut Frame, app: &App, area: Rect) {
         }
     };
 
+    // Track content height for vim navigation
+    app.preview_content_height = lines.len() as u16;
+
     let paragraph = Paragraph::new(lines)
         .block(
             Block::default()
@@ -211,7 +214,7 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
         Some(msg) => vec![Span::raw(" "), Span::styled(msg.clone(), Style::default().fg(Color::Yellow))],
         None => {
             let bindings: &[(&str, &str)] = match app.mode {
-                Mode::Normal if app.focus == Focus::Preview => &[("j/k", "scroll"), ("Tab", "toggle view"), ("Esc", "back"), (":", "command")],
+                Mode::Normal if app.focus == Focus::Preview => &[("j/k", "scroll"), ("^d/^u", "½page"), ("gg/G", "top/bottom"), ("Esc", "back")],
                 Mode::Normal => &[("Enter", "open"), ("c", "create"), ("/", "search"), (":", "cmd"), ("Tab", "tags")],
                 Mode::TagBrowse => &[("Enter", "filter"), ("Esc", "clear & back"), ("Tab", "notes"), (":", "command")],
                 Mode::Search => &[("Enter", "confirm"), ("Esc", "cancel")],

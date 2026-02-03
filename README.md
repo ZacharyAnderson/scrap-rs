@@ -64,6 +64,13 @@ scrap edit-tag --delete <name> [tags...]  # Remove tags
 scrap find [query]              # Launch TUI with optional search
 ```
 
+Note names can contain spaces when quoted:
+
+```sh
+scrap add "my note name" tag1 tag2
+scrap open "my note name"
+```
+
 ### Piped / Programmatic Commands
 
 These commands read from stdin and write to stdout, making them suitable for scripts and external tools.
@@ -73,6 +80,13 @@ echo "note content" | scrap write <name> [tags...]   # Create or update a note f
 scrap read <name>                                     # Print note content to stdout
 scrap list [--tag TAG]                                # List note names, one per line
 echo "extra content" | scrap append <name>            # Append stdin to an existing note
+```
+
+Names with spaces work here too:
+
+```sh
+echo "content" | scrap write "my note" tag1
+scrap read "my note"
 ```
 
 ## Summarize Feature

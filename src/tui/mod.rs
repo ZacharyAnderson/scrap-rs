@@ -68,7 +68,9 @@ pub struct App {
     pub summary_force_regen: bool,
     pub preview_tab: PreviewTab,
     pub preview_scroll: u16,
+    pub preview_content_height: u16,
     pub status_expires: Option<Instant>,
+    pub pending_g: bool,
 }
 
 impl App {
@@ -98,7 +100,9 @@ impl App {
             summary_force_regen: false,
             preview_tab: PreviewTab::Note,
             preview_scroll: 0,
+            preview_content_height: 0,
             status_expires: None,
+            pending_g: false,
         }
     }
 

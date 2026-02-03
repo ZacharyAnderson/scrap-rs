@@ -1,6 +1,6 @@
 use anyhow::Result;
 use crossterm::{
-    event::{KeyCode, KeyEvent},
+    event::{KeyCode, KeyEvent, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -88,6 +88,18 @@ fn clear_summary(app: &mut App) {
 }
 
 fn handle_preview(app: &mut App, key: KeyEvent) -> Result<()> {
+    const HALF_PAGE: u16 = 15;
+
+    // Handle 'gg' sequence
+    if app.pending_g {
+        app.pending_g = false;
+        if key.code == KeyCode::Char('g') {
+            app.preview_scroll = 0;
+            return Ok(());
+        }
+        // If not 'g', fall through to handle the key normally
+    }
+
     match key.code {
         KeyCode::Char('q') => app.should_quit = true,
         KeyCode::Char('j') | KeyCode::Down => {
@@ -95,6 +107,18 @@ fn handle_preview(app: &mut App, key: KeyEvent) -> Result<()> {
         }
         KeyCode::Char('k') | KeyCode::Up => {
             app.preview_scroll = app.preview_scroll.saturating_sub(1);
+        }
+        KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.preview_scroll = app.preview_scroll.saturating_add(HALF_PAGE);
+        }
+        KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.preview_scroll = app.preview_scroll.saturating_sub(HALF_PAGE);
+        }
+        KeyCode::Char('g') => {
+            app.pending_g = true;
+        }
+        KeyCode::Char('G') => {
+            app.preview_scroll = app.preview_content_height.saturating_sub(10);
         }
         KeyCode::Tab => {
             match app.preview_tab {
@@ -129,6 +153,7 @@ fn handle_preview(app: &mut App, key: KeyEvent) -> Result<()> {
         KeyCode::Esc => {
             app.focus = Focus::NoteList;
             app.preview_scroll = 0;
+            app.pending_g = false;
         }
         KeyCode::Char(':') => {
             app.focus = Focus::NoteList;

@@ -3,6 +3,7 @@ mod db;
 mod llm;
 mod tui;
 mod utils;
+mod version_check;
 
 use clap::{Parser, Subcommand};
 
@@ -76,6 +77,9 @@ enum Commands {
 }
 
 fn main() -> anyhow::Result<()> {
+    // Check for updates (non-blocking, cached)
+    version_check::check_for_updates();
+
     let cli = Cli::parse();
 
     match cli.command {
