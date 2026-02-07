@@ -303,6 +303,22 @@ fn handle_add_note_tags(
     match key.code {
         KeyCode::Esc => {
             app.mode = Mode::Normal;
+            app.tag_suggestions.clear();
+            app.selected_suggestion = 0;
+        }
+        KeyCode::Tab => {
+            if !app.tag_suggestions.is_empty() {
+                app.accept_tag_suggestion(&mut app.tags_buffer.clone());
+                let mut buf = app.tags_buffer.clone();
+                app.accept_tag_suggestion(&mut buf);
+                app.tags_buffer = buf;
+            }
+        }
+        KeyCode::Up => {
+            app.move_suggestion_selection(-1);
+        }
+        KeyCode::Down => {
+            app.move_suggestion_selection(1);
         }
         KeyCode::Enter => {
             let tags: Vec<String> = app
@@ -340,12 +356,16 @@ fn handle_add_note_tags(
                 }
             }
             app.mode = Mode::Normal;
+            app.tag_suggestions.clear();
+            app.selected_suggestion = 0;
         }
         KeyCode::Backspace => {
             app.tags_buffer.pop();
+            app.update_tag_suggestions(&app.tags_buffer.clone());
         }
         KeyCode::Char(c) => {
             app.tags_buffer.push(c);
+            app.update_tag_suggestions(&app.tags_buffer.clone());
         }
         _ => {}
     }
@@ -356,12 +376,27 @@ fn handle_edit_tags(app: &mut App, key: KeyEvent) -> Result<()> {
     match key.code {
         KeyCode::Esc => {
             app.mode = Mode::Normal;
+            app.tag_suggestions.clear();
+            app.selected_suggestion = 0;
         }
         KeyCode::Tab => {
-            app.mode = match app.mode {
-                Mode::EditTagsAdd => Mode::EditTagsRemove,
-                _ => Mode::EditTagsAdd,
-            };
+            // If suggestions available, accept; otherwise toggle add/remove
+            if !app.tag_suggestions.is_empty() {
+                let mut buf = app.input_buffer.clone();
+                app.accept_tag_suggestion(&mut buf);
+                app.input_buffer = buf;
+            } else {
+                app.mode = match app.mode {
+                    Mode::EditTagsAdd => Mode::EditTagsRemove,
+                    _ => Mode::EditTagsAdd,
+                };
+            }
+        }
+        KeyCode::Up => {
+            app.move_suggestion_selection(-1);
+        }
+        KeyCode::Down => {
+            app.move_suggestion_selection(1);
         }
         KeyCode::Enter => {
             let selected_note = match app.selected_note() {
@@ -412,12 +447,16 @@ fn handle_edit_tags(app: &mut App, key: KeyEvent) -> Result<()> {
             let action = if is_add { "added to" } else { "removed from" };
             app.status_message = Some(format!("Tags {} '{}'", action, selected_note));
             app.mode = Mode::Normal;
+            app.tag_suggestions.clear();
+            app.selected_suggestion = 0;
         }
         KeyCode::Backspace => {
             app.input_buffer.pop();
+            app.update_tag_suggestions(&app.input_buffer.clone());
         }
         KeyCode::Char(c) => {
             app.input_buffer.push(c);
+            app.update_tag_suggestions(&app.input_buffer.clone());
         }
         _ => {}
     }

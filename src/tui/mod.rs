@@ -71,6 +71,8 @@ pub struct App {
     pub preview_content_height: u16,
     pub status_expires: Option<Instant>,
     pub pending_g: bool,
+    pub tag_suggestions: Vec<String>,
+    pub selected_suggestion: usize,
 }
 
 impl App {
@@ -103,6 +105,8 @@ impl App {
             preview_content_height: 0,
             status_expires: None,
             pending_g: false,
+            tag_suggestions: Vec::new(),
+            selected_suggestion: 0,
         }
     }
 
@@ -177,6 +181,66 @@ impl App {
             return;
         }
         self.selected_tag = ((self.selected_tag as i32 + delta).rem_euclid(len as i32)) as usize;
+    }
+
+    /// Update tag suggestions based on current input
+    pub fn update_tag_suggestions(&mut self, input: &str) {
+        // Get the current word being typed (after last space)
+        let current_word = input.split_whitespace().last().unwrap_or("");
+
+        if current_word.is_empty() {
+            self.tag_suggestions.clear();
+            self.selected_suggestion = 0;
+            return;
+        }
+
+        let current_lower = current_word.to_lowercase();
+
+        // Get tags already entered in the input
+        let entered_tags: Vec<&str> = input.split_whitespace().collect();
+        let entered_set: std::collections::HashSet<&str> =
+            entered_tags.iter().take(entered_tags.len().saturating_sub(1)).copied().collect();
+
+        // Filter all_tags to find matches not already entered
+        self.tag_suggestions = self
+            .all_tags
+            .iter()
+            .filter(|t| {
+                t.name.to_lowercase().starts_with(&current_lower)
+                    && !entered_set.contains(t.name.as_str())
+            })
+            .take(5)
+            .map(|t| t.name.clone())
+            .collect();
+
+        // Reset selection if out of bounds
+        if self.selected_suggestion >= self.tag_suggestions.len() {
+            self.selected_suggestion = 0;
+        }
+    }
+
+    /// Accept the currently selected tag suggestion
+    pub fn accept_tag_suggestion(&mut self, buffer: &mut String) {
+        if let Some(suggestion) = self.tag_suggestions.get(self.selected_suggestion) {
+            // Remove the partial word and replace with suggestion
+            let words: Vec<&str> = buffer.split_whitespace().collect();
+            let prefix: String = if words.len() > 1 {
+                words[..words.len() - 1].join(" ") + " "
+            } else {
+                String::new()
+            };
+            *buffer = format!("{}{} ", prefix, suggestion);
+            self.tag_suggestions.clear();
+            self.selected_suggestion = 0;
+        }
+    }
+
+    pub fn move_suggestion_selection(&mut self, delta: i32) {
+        let len = self.tag_suggestions.len();
+        if len == 0 {
+            return;
+        }
+        self.selected_suggestion = ((self.selected_suggestion as i32 + delta).rem_euclid(len as i32)) as usize;
     }
 }
 

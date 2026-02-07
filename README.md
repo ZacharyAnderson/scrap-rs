@@ -53,6 +53,25 @@ scrap
 
 **Tag panel:** Press `Enter` to toggle tag filters. Select multiple tags to narrow results. `Esc` clears all filters.
 
+**Tag autocomplete:** When adding or editing tags, start typing and suggestions will appear based on existing tags:
+
+| Key | Action |
+|-----|--------|
+| `Tab` | Accept highlighted suggestion |
+| `↑` / `↓` | Navigate suggestions |
+
+**Preview pane:** Press `Tab` twice to focus the preview, then use vim-style navigation:
+
+| Key | Action |
+|-----|--------|
+| `j` / `k` | Scroll one line |
+| `Ctrl+d` | Scroll down half page |
+| `Ctrl+u` | Scroll up half page |
+| `gg` | Go to top |
+| `G` | Go to bottom |
+| `Tab` | Toggle note/summary view |
+| `Esc` | Return to note list |
+
 ### CLI Commands
 
 ```sh

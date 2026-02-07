@@ -220,8 +220,8 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
                 Mode::Search => &[("Enter", "confirm"), ("Esc", "cancel")],
                 Mode::Command => &[("o", "open"), ("a", "add"), ("t", "tags"), ("s", "summarize"), ("Esc", "cancel")],
                 Mode::AddNoteName => &[("Enter", "next"), ("Esc", "cancel")],
-                Mode::AddNoteTags => &[("Enter", "open editor"), ("Esc", "cancel")],
-                Mode::EditTagsAdd | Mode::EditTagsRemove => &[("Enter", "apply"), ("Tab", "toggle add/remove"), ("Esc", "cancel")],
+                Mode::AddNoteTags => &[("Tab", "complete"), ("↑/↓", "select"), ("Enter", "open editor"), ("Esc", "cancel")],
+                Mode::EditTagsAdd | Mode::EditTagsRemove => &[("Tab", "complete/toggle"), ("↑/↓", "select"), ("Enter", "apply"), ("Esc", "cancel")],
             };
             let mut spans = vec![Span::raw(" ")];
             for (i, (key, desc)) in bindings.iter().enumerate() {
@@ -252,21 +252,40 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
 }
 
 fn draw_input_modal(f: &mut Frame, app: &App) {
-    let area = centered_rect(50, 5, f.area());
+    let has_suggestions = !app.tag_suggestions.is_empty();
+    let height = if has_suggestions { 5 + app.tag_suggestions.len() as u16 } else { 5 };
+    let area = centered_rect(50, height, f.area());
 
-    let (title, input) = match app.mode {
-        Mode::AddNoteName => ("Add Note - Name", &app.input_buffer),
-        Mode::AddNoteTags => ("Add Note - Tags (space-separated)", &app.tags_buffer),
-        Mode::EditTagsAdd => ("Edit Tags [Add] (space-separated)", &app.input_buffer),
-        Mode::EditTagsRemove => ("Edit Tags [Remove] (space-separated)", &app.input_buffer),
+    let (title, input, show_suggestions) = match app.mode {
+        Mode::AddNoteName => ("Add Note - Name", &app.input_buffer, false),
+        Mode::AddNoteTags => ("Add Note - Tags (space-separated)", &app.tags_buffer, true),
+        Mode::EditTagsAdd => ("Edit Tags [Add] (space-separated)", &app.input_buffer, true),
+        Mode::EditTagsRemove => ("Edit Tags [Remove] (space-separated)", &app.input_buffer, true),
         _ => return,
     };
 
     f.render_widget(Clear, area);
 
     let block = Block::default().borders(Borders::ALL).title(title);
-    let paragraph = Paragraph::new(format!("> {}", input)).block(block);
-    f.render_widget(paragraph, area);
+
+    if show_suggestions && has_suggestions {
+        // Build content with input and suggestions
+        let mut lines = vec![Line::from(format!("> {}", input))];
+        lines.push(Line::from("─".repeat(area.width.saturating_sub(2) as usize)));
+        for (i, suggestion) in app.tag_suggestions.iter().enumerate() {
+            let style = if i == app.selected_suggestion {
+                Style::default().fg(Color::Black).bg(Color::Cyan)
+            } else {
+                Style::default().fg(Color::DarkGray)
+            };
+            lines.push(Line::from(Span::styled(format!("  {}", suggestion), style)));
+        }
+        let paragraph = Paragraph::new(lines).block(block);
+        f.render_widget(paragraph, area);
+    } else {
+        let paragraph = Paragraph::new(format!("> {}", input)).block(block);
+        f.render_widget(paragraph, area);
+    }
 }
 
 fn draw_search_popup(f: &mut Frame, app: &App) {
