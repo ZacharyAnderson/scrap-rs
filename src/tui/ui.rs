@@ -161,7 +161,6 @@ fn draw_preview(f: &mut Frame, app: &mut App, area: Rect) {
             (title, lines, border)
         }
         _ => {
-            // Note tab (or Summary tab with no summary available — fall back to Note)
             let (title, lines) = match app.selected_note() {
                 Some(note) => {
                     let rendered = markdown::render_markdown(&note.note);
@@ -178,10 +177,42 @@ fn draw_preview(f: &mut Frame, app: &mut App, area: Rect) {
         }
     };
 
-    // Track content height for vim navigation
-    app.preview_content_height = lines.len() as u16;
+    // Track viewport height for cursor navigation (inner area minus borders)
+    let inner_height = area.height.saturating_sub(2);
+    app.preview_content_height = inner_height;
 
-    let paragraph = Paragraph::new(lines)
+    // Apply cursor and selection highlights when preview is focused
+    let styled_lines: Vec<Line> = if is_focused {
+        lines
+            .into_iter()
+            .enumerate()
+            .map(|(i, line)| {
+                let is_cursor = i == app.preview_cursor;
+                let is_selected = app.visual_anchor.map_or(false, |anchor| {
+                    let start = anchor.min(app.preview_cursor);
+                    let end = anchor.max(app.preview_cursor);
+                    i >= start && i <= end
+                });
+
+                if is_selected && is_cursor {
+                    // Cursor within selection — brighter highlight
+                    apply_line_bg(line, Color::Rgb(80, 80, 140))
+                } else if is_selected {
+                    // Selected but not cursor — muted highlight
+                    apply_line_bg(line, Color::Rgb(50, 50, 100))
+                } else if is_cursor {
+                    // Cursor line (no selection) — subtle highlight
+                    apply_line_bg(line, Color::Rgb(40, 40, 60))
+                } else {
+                    line
+                }
+            })
+            .collect()
+    } else {
+        lines
+    };
+
+    let paragraph = Paragraph::new(styled_lines)
         .block(
             Block::default()
                 .borders(Borders::ALL)
@@ -192,6 +223,16 @@ fn draw_preview(f: &mut Frame, app: &mut App, area: Rect) {
         .scroll((app.preview_scroll, 0));
 
     f.render_widget(paragraph, area);
+}
+
+/// Apply a background color to all spans in a line.
+fn apply_line_bg(line: Line<'static>, bg: Color) -> Line<'static> {
+    Line::from(
+        line.spans
+            .into_iter()
+            .map(|span| Span::styled(span.content, span.style.bg(bg)))
+            .collect::<Vec<_>>(),
+    )
 }
 
 fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
@@ -215,7 +256,7 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
         Some(msg) => vec![Span::raw(" "), Span::styled(msg.clone(), Style::default().fg(Color::Yellow))],
         None => {
             let bindings: &[(&str, &str)] = match app.mode {
-                Mode::Normal if app.focus == Focus::Preview => &[("j/k", "scroll"), ("^d/^u", "½page"), ("gg/G", "top/bottom"), ("Esc", "back")],
+                Mode::Normal if app.focus == Focus::Preview => &[("j/k", "move"), ("V", "visual"), ("^d/^u", "½page"), ("gg/G", "top/bottom"), ("Tab", "toggle"), ("Esc", "back")],
                 Mode::Normal => &[("Enter", "open"), ("c", "create"), ("/", "search"), (":", "cmd"), ("Tab", "tags")],
                 Mode::TagBrowse => &[("Enter", "filter"), ("Esc", "clear & back"), ("Tab", "notes"), (":", "command")],
                 Mode::Search => &[("Enter", "confirm"), ("Esc", "cancel")],
