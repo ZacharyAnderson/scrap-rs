@@ -117,7 +117,14 @@ fn handle_preview(app: &mut App, key: KeyEvent) -> Result<()> {
     }
 
     match key.code {
-        KeyCode::Char('q') => app.should_quit = true,
+        KeyCode::Char('q') => {
+            if app.mode == Mode::VisualLine {
+                app.visual_anchor = None;
+                app.mode = Mode::Normal;
+            } else {
+                app.should_quit = true;
+            }
+        }
         KeyCode::Char('j') | KeyCode::Down => {
             app.preview_cursor = (app.preview_cursor + 1).min(content_len.saturating_sub(1));
             ensure_cursor_visible(app);
@@ -142,10 +149,18 @@ fn handle_preview(app: &mut App, key: KeyEvent) -> Result<()> {
             ensure_cursor_visible(app);
         }
         KeyCode::Char('V') => {
-            app.visual_anchor = Some(app.preview_cursor);
-            app.mode = Mode::VisualLine;
+            if app.mode == Mode::VisualLine {
+                app.visual_anchor = None;
+                app.mode = Mode::Normal;
+            } else {
+                app.visual_anchor = Some(app.preview_cursor);
+                app.mode = Mode::VisualLine;
+            }
         }
-        KeyCode::Tab => {
+        KeyCode::Char('y') if app.mode == Mode::VisualLine => {
+            yank_selection(app);
+        }
+        KeyCode::Tab if app.mode != Mode::VisualLine => {
             match app.preview_tab {
                 PreviewTab::Note => {
                     if app.summary_content.is_none() {
@@ -178,12 +193,21 @@ fn handle_preview(app: &mut App, key: KeyEvent) -> Result<()> {
             }
         }
         KeyCode::Esc => {
-            app.focus = Focus::NoteList;
-            app.preview_scroll = 0;
-            app.preview_cursor = 0;
-            app.pending_g = false;
+            if app.mode == Mode::VisualLine {
+                app.visual_anchor = None;
+                app.mode = Mode::Normal;
+            } else {
+                app.focus = Focus::NoteList;
+                app.preview_scroll = 0;
+                app.preview_cursor = 0;
+                app.pending_g = false;
+            }
         }
         KeyCode::Char(':') => {
+            app.visual_anchor = None;
+            if app.mode == Mode::VisualLine {
+                app.mode = Mode::Normal;
+            }
             app.focus = Focus::NoteList;
             app.mode = Mode::Command;
             app.status_message = None;
@@ -208,6 +232,50 @@ fn ensure_cursor_visible(app: &mut App) {
     } else if app.preview_cursor >= scroll + viewport_height - scrolloff {
         app.preview_scroll = (app.preview_cursor + scrolloff + 1).saturating_sub(viewport_height) as u16;
     }
+}
+
+/// Yank the visually selected lines to clipboard and internal register.
+fn yank_selection(app: &mut App) {
+    let anchor = match app.visual_anchor {
+        Some(a) => a,
+        None => return,
+    };
+
+    let lines = app.preview_raw_lines();
+    if lines.is_empty() {
+        return;
+    }
+
+    let start = anchor.min(app.preview_cursor);
+    let end = anchor.max(app.preview_cursor);
+    let end = end.min(lines.len().saturating_sub(1));
+
+    let selected_text: String = lines[start..=end].join("\n");
+    let line_count = end - start + 1;
+
+    // Store in internal register
+    app.yank_register = Some(selected_text.clone());
+
+    // Copy to system clipboard
+    match arboard::Clipboard::new() {
+        Ok(mut clipboard) => {
+            if let Err(_) = clipboard.set_text(&selected_text) {
+                app.status_message = Some(format!("{} lines yanked (clipboard unavailable)", line_count));
+                app.status_expires = Some(Instant::now() + Duration::from_secs(3));
+            } else {
+                app.status_message = Some(format!("{} lines yanked", line_count));
+                app.status_expires = Some(Instant::now() + Duration::from_secs(3));
+            }
+        }
+        Err(_) => {
+            app.status_message = Some(format!("{} lines yanked (clipboard unavailable)", line_count));
+            app.status_expires = Some(Instant::now() + Duration::from_secs(3));
+        }
+    }
+
+    // Exit visual mode
+    app.visual_anchor = None;
+    app.mode = Mode::Normal;
 }
 
 fn handle_tag_browse(app: &mut App, key: KeyEvent) -> Result<()> {
