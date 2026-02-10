@@ -42,11 +42,13 @@ fn handle_normal(app: &mut App, key: KeyEvent, terminal: &mut Terminal<Crossterm
             app.move_selection(1);
             clear_summary(app);
             app.preview_scroll = 0;
+            app.preview_cursor = 0;
         }
         KeyCode::Char('k') | KeyCode::Up => {
             app.move_selection(-1);
             clear_summary(app);
             app.preview_scroll = 0;
+            app.preview_cursor = 0;
         }
         KeyCode::Char('/') => {
             app.mode = Mode::Search;
@@ -74,6 +76,7 @@ fn handle_normal(app: &mut App, key: KeyEvent, terminal: &mut Terminal<Crossterm
             app.focus = Focus::TagPanel;
             app.mode = Mode::TagBrowse;
             app.status_message = None;
+            app.visual_anchor = None;
             clear_summary(app);
         }
         _ => {}
