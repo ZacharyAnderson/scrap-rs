@@ -19,7 +19,7 @@ pub fn handle_key(
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
 ) -> Result<()> {
     // Preview focus is handled regardless of mode
-    if app.focus == Focus::Preview && app.mode == Mode::Normal {
+    if app.focus == Focus::Preview && (app.mode == Mode::Normal || app.mode == Mode::VisualLine) {
         return handle_preview(app, key);
     }
 
@@ -31,6 +31,7 @@ pub fn handle_key(
         Mode::AddNoteName => handle_add_note_name(app, key),
         Mode::AddNoteTags => handle_add_note_tags(app, key, terminal),
         Mode::EditTagsAdd | Mode::EditTagsRemove => handle_edit_tags(app, key),
+        Mode::VisualLine => Ok(()), // Handled by preview focus guard above
     }
 }
 
@@ -41,11 +42,13 @@ fn handle_normal(app: &mut App, key: KeyEvent, terminal: &mut Terminal<Crossterm
             app.move_selection(1);
             clear_summary(app);
             app.preview_scroll = 0;
+            app.preview_cursor = 0;
         }
         KeyCode::Char('k') | KeyCode::Up => {
             app.move_selection(-1);
             clear_summary(app);
             app.preview_scroll = 0;
+            app.preview_cursor = 0;
         }
         KeyCode::Char('/') => {
             app.mode = Mode::Search;
@@ -73,6 +76,7 @@ fn handle_normal(app: &mut App, key: KeyEvent, terminal: &mut Terminal<Crossterm
             app.focus = Focus::TagPanel;
             app.mode = Mode::TagBrowse;
             app.status_message = None;
+            app.visual_anchor = None;
             clear_summary(app);
         }
         _ => {}
@@ -88,42 +92,80 @@ fn clear_summary(app: &mut App) {
 }
 
 fn handle_preview(app: &mut App, key: KeyEvent) -> Result<()> {
-    const HALF_PAGE: u16 = 15;
+    let content_len = app.preview_raw_lines().len();
+    if content_len == 0 {
+        match key.code {
+            KeyCode::Char('q') => app.should_quit = true,
+            KeyCode::Esc => {
+                app.focus = Focus::NoteList;
+                app.preview_cursor = 0;
+                app.preview_scroll = 0;
+                app.pending_g = false;
+            }
+            _ => {}
+        }
+        return Ok(());
+    }
+
+    let half_page = (app.preview_content_height / 2).max(1) as usize;
 
     // Handle 'gg' sequence
     if app.pending_g {
         app.pending_g = false;
         if key.code == KeyCode::Char('g') {
-            app.preview_scroll = 0;
+            app.preview_cursor = 0;
+            ensure_cursor_visible(app);
             return Ok(());
         }
-        // If not 'g', fall through to handle the key normally
     }
 
     match key.code {
-        KeyCode::Char('q') => app.should_quit = true,
+        KeyCode::Char('q') => {
+            if app.mode == Mode::VisualLine {
+                app.visual_anchor = None;
+                app.mode = Mode::Normal;
+            } else {
+                app.should_quit = true;
+            }
+        }
         KeyCode::Char('j') | KeyCode::Down => {
-            app.preview_scroll = app.preview_scroll.saturating_add(1);
+            app.preview_cursor = (app.preview_cursor + 1).min(content_len.saturating_sub(1));
+            ensure_cursor_visible(app);
         }
         KeyCode::Char('k') | KeyCode::Up => {
-            app.preview_scroll = app.preview_scroll.saturating_sub(1);
+            app.preview_cursor = app.preview_cursor.saturating_sub(1);
+            ensure_cursor_visible(app);
         }
         KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            app.preview_scroll = app.preview_scroll.saturating_add(HALF_PAGE);
+            app.preview_cursor = (app.preview_cursor + half_page).min(content_len.saturating_sub(1));
+            ensure_cursor_visible(app);
         }
         KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            app.preview_scroll = app.preview_scroll.saturating_sub(HALF_PAGE);
+            app.preview_cursor = app.preview_cursor.saturating_sub(half_page);
+            ensure_cursor_visible(app);
         }
         KeyCode::Char('g') => {
             app.pending_g = true;
         }
         KeyCode::Char('G') => {
-            app.preview_scroll = app.preview_content_height.saturating_sub(10);
+            app.preview_cursor = content_len.saturating_sub(1);
+            ensure_cursor_visible(app);
         }
-        KeyCode::Tab => {
+        KeyCode::Char('V') => {
+            if app.mode == Mode::VisualLine {
+                app.visual_anchor = None;
+                app.mode = Mode::Normal;
+            } else {
+                app.visual_anchor = Some(app.preview_cursor);
+                app.mode = Mode::VisualLine;
+            }
+        }
+        KeyCode::Char('y') if app.mode == Mode::VisualLine => {
+            yank_selection(app);
+        }
+        KeyCode::Tab if app.mode != Mode::VisualLine => {
             match app.preview_tab {
                 PreviewTab::Note => {
-                    // Try to load summary from DB if not already in memory
                     if app.summary_content.is_none() {
                         if let Some(note) = app.selected_note() {
                             if let Ok(Some((summary, stale))) = db::get_summary(&app.conn, note.id) {
@@ -136,26 +178,39 @@ fn handle_preview(app: &mut App, key: KeyEvent) -> Result<()> {
                     if app.summary_content.is_some() {
                         app.preview_tab = PreviewTab::Summary;
                         app.preview_scroll = 0;
+                        app.preview_cursor = 0;
                     } else {
                         app.status_message = Some("No summary available. Use :s to generate.".to_string());
                         app.status_expires = Some(Instant::now() + Duration::from_secs(3));
                         app.focus = Focus::NoteList;
                         app.preview_scroll = 0;
+                        app.preview_cursor = 0;
                     }
                 }
                 PreviewTab::Summary => {
                     app.focus = Focus::NoteList;
                     app.preview_tab = PreviewTab::Note;
                     app.preview_scroll = 0;
+                    app.preview_cursor = 0;
                 }
             }
         }
         KeyCode::Esc => {
-            app.focus = Focus::NoteList;
-            app.preview_scroll = 0;
-            app.pending_g = false;
+            if app.mode == Mode::VisualLine {
+                app.visual_anchor = None;
+                app.mode = Mode::Normal;
+            } else {
+                app.focus = Focus::NoteList;
+                app.preview_scroll = 0;
+                app.preview_cursor = 0;
+                app.pending_g = false;
+            }
         }
         KeyCode::Char(':') => {
+            app.visual_anchor = None;
+            if app.mode == Mode::VisualLine {
+                app.mode = Mode::Normal;
+            }
             app.focus = Focus::NoteList;
             app.mode = Mode::Command;
             app.status_message = None;
@@ -163,6 +218,67 @@ fn handle_preview(app: &mut App, key: KeyEvent) -> Result<()> {
         _ => {}
     }
     Ok(())
+}
+
+/// Scroll the viewport so the cursor line is visible.
+fn ensure_cursor_visible(app: &mut App) {
+    let scroll = app.preview_scroll as usize;
+    let viewport_height = app.preview_content_height as usize;
+    let scrolloff: usize = 2;
+
+    if viewport_height == 0 {
+        return;
+    }
+
+    if app.preview_cursor < scroll + scrolloff {
+        app.preview_scroll = app.preview_cursor.saturating_sub(scrolloff) as u16;
+    } else if app.preview_cursor >= scroll + viewport_height.saturating_sub(scrolloff) {
+        app.preview_scroll = (app.preview_cursor + scrolloff + 1).saturating_sub(viewport_height) as u16;
+    }
+}
+
+/// Yank the visually selected lines to clipboard and internal register.
+fn yank_selection(app: &mut App) {
+    let anchor = match app.visual_anchor {
+        Some(a) => a,
+        None => return,
+    };
+
+    let lines = app.preview_raw_lines();
+    if lines.is_empty() {
+        return;
+    }
+
+    let start = anchor.min(app.preview_cursor);
+    let end = anchor.max(app.preview_cursor);
+    let end = end.min(lines.len().saturating_sub(1));
+
+    let selected_text: String = lines[start..=end].join("\n");
+    let line_count = end - start + 1;
+
+    // Store in internal register
+    app.yank_register = Some(selected_text.clone());
+
+    // Copy to system clipboard
+    match arboard::Clipboard::new() {
+        Ok(mut clipboard) => {
+            if clipboard.set_text(&selected_text).is_err() {
+                app.status_message = Some(format!("{} lines yanked (clipboard unavailable)", line_count));
+                app.status_expires = Some(Instant::now() + Duration::from_secs(3));
+            } else {
+                app.status_message = Some(format!("{} lines yanked", line_count));
+                app.status_expires = Some(Instant::now() + Duration::from_secs(3));
+            }
+        }
+        Err(_) => {
+            app.status_message = Some(format!("{} lines yanked (clipboard unavailable)", line_count));
+            app.status_expires = Some(Instant::now() + Duration::from_secs(3));
+        }
+    }
+
+    // Exit visual mode
+    app.visual_anchor = None;
+    app.mode = Mode::Normal;
 }
 
 fn handle_tag_browse(app: &mut App, key: KeyEvent) -> Result<()> {
@@ -198,6 +314,7 @@ fn handle_tag_browse(app: &mut App, key: KeyEvent) -> Result<()> {
             app.focus = Focus::Preview;
             app.mode = Mode::Normal;
             app.preview_scroll = 0;
+            app.preview_cursor = 0;
         }
         KeyCode::Char(':') => {
             app.focus = Focus::NoteList;
