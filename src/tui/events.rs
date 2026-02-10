@@ -31,7 +31,7 @@ pub fn handle_key(
         Mode::AddNoteName => handle_add_note_name(app, key),
         Mode::AddNoteTags => handle_add_note_tags(app, key, terminal),
         Mode::EditTagsAdd | Mode::EditTagsRemove => handle_edit_tags(app, key),
-        Mode::VisualLine => Ok(()), // TODO: handle in a later task
+        Mode::VisualLine => Ok(()), // Handled by preview focus guard above
     }
 }
 
@@ -232,7 +232,7 @@ fn ensure_cursor_visible(app: &mut App) {
 
     if app.preview_cursor < scroll + scrolloff {
         app.preview_scroll = app.preview_cursor.saturating_sub(scrolloff) as u16;
-    } else if app.preview_cursor >= scroll + viewport_height - scrolloff {
+    } else if app.preview_cursor >= scroll + viewport_height.saturating_sub(scrolloff) {
         app.preview_scroll = (app.preview_cursor + scrolloff + 1).saturating_sub(viewport_height) as u16;
     }
 }
@@ -262,7 +262,7 @@ fn yank_selection(app: &mut App) {
     // Copy to system clipboard
     match arboard::Clipboard::new() {
         Ok(mut clipboard) => {
-            if let Err(_) = clipboard.set_text(&selected_text) {
+            if clipboard.set_text(&selected_text).is_err() {
                 app.status_message = Some(format!("{} lines yanked (clipboard unavailable)", line_count));
                 app.status_expires = Some(Instant::now() + Duration::from_secs(3));
             } else {
@@ -314,6 +314,7 @@ fn handle_tag_browse(app: &mut App, key: KeyEvent) -> Result<()> {
             app.focus = Focus::Preview;
             app.mode = Mode::Normal;
             app.preview_scroll = 0;
+            app.preview_cursor = 0;
         }
         KeyCode::Char(':') => {
             app.focus = Focus::NoteList;

@@ -188,7 +188,7 @@ fn draw_preview(f: &mut Frame, app: &mut App, area: Rect) {
             .enumerate()
             .map(|(i, line)| {
                 let is_cursor = i == app.preview_cursor;
-                let is_selected = app.visual_anchor.map_or(false, |anchor| {
+                let is_selected = app.visual_anchor.is_some_and(|anchor| {
                     let start = anchor.min(app.preview_cursor);
                     let end = anchor.max(app.preview_cursor);
                     i >= start && i <= end
@@ -264,7 +264,7 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
                 Mode::AddNoteName => &[("Enter", "next"), ("Esc", "cancel")],
                 Mode::AddNoteTags => &[("Tab", "complete"), ("↑/↓", "select"), ("Enter", "open editor"), ("Esc", "cancel")],
                 Mode::EditTagsAdd | Mode::EditTagsRemove => &[("Tab", "complete/toggle"), ("↑/↓", "select"), ("Enter", "apply"), ("Esc", "cancel")],
-                Mode::VisualLine => &[("j/k", "extend"), ("y", "yank"), ("Esc", "cancel")],
+                Mode::VisualLine => &[("j/k", "extend"), ("y", "yank"), ("V", "exit"), ("Esc", "cancel")],
             };
             let mut spans = vec![Span::raw(" ")];
             for (i, (key, desc)) in bindings.iter().enumerate() {
