@@ -31,6 +31,7 @@ pub fn handle_key(
         Mode::AddNoteName => handle_add_note_name(app, key),
         Mode::AddNoteTags => handle_add_note_tags(app, key, terminal),
         Mode::EditTagsAdd | Mode::EditTagsRemove => handle_edit_tags(app, key),
+        Mode::VisualLine => Ok(()), // TODO: handle in a later task
     }
 }
 

@@ -25,6 +25,7 @@ pub enum Mode {
     EditTagsAdd,
     EditTagsRemove,
     TagBrowse,
+    VisualLine,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -73,6 +74,9 @@ pub struct App {
     pub pending_g: bool,
     pub tag_suggestions: Vec<String>,
     pub selected_suggestion: usize,
+    pub preview_cursor: usize,
+    pub visual_anchor: Option<usize>,
+    pub yank_register: Option<String>,
 }
 
 impl App {
@@ -107,6 +111,9 @@ impl App {
             pending_g: false,
             tag_suggestions: Vec::new(),
             selected_suggestion: 0,
+            preview_cursor: 0,
+            visual_anchor: None,
+            yank_register: None,
         }
     }
 
@@ -241,6 +248,24 @@ impl App {
             return;
         }
         self.selected_suggestion = ((self.selected_suggestion as i32 + delta).rem_euclid(len as i32)) as usize;
+    }
+
+    /// Get the raw markdown content currently displayed in the preview.
+    /// Returns note content or summary content depending on the active preview tab.
+    pub fn preview_raw_content(&self) -> Option<String> {
+        match self.preview_tab {
+            PreviewTab::Summary if self.summary_content.is_some() => {
+                self.summary_content.clone()
+            }
+            _ => self.selected_note().map(|n| n.note.clone()),
+        }
+    }
+
+    /// Get the lines of raw content for the preview.
+    pub fn preview_raw_lines(&self) -> Vec<String> {
+        self.preview_raw_content()
+            .map(|c| c.lines().map(|l| l.to_string()).collect())
+            .unwrap_or_default()
     }
 }
 

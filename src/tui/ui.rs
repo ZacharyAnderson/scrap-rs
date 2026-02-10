@@ -204,6 +204,7 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
         Mode::AddNoteName | Mode::AddNoteTags => (" ADD NOTE ", Color::Green),
         Mode::EditTagsAdd => (" EDIT TAGS [+] ", Color::Green),
         Mode::EditTagsRemove => (" EDIT TAGS [-] ", Color::Green),
+        Mode::VisualLine => (" VISUAL LINE ", Color::Magenta),
     };
 
     let key_style = Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD);
@@ -222,6 +223,7 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
                 Mode::AddNoteName => &[("Enter", "next"), ("Esc", "cancel")],
                 Mode::AddNoteTags => &[("Tab", "complete"), ("↑/↓", "select"), ("Enter", "open editor"), ("Esc", "cancel")],
                 Mode::EditTagsAdd | Mode::EditTagsRemove => &[("Tab", "complete/toggle"), ("↑/↓", "select"), ("Enter", "apply"), ("Esc", "cancel")],
+                Mode::VisualLine => &[("j/k", "extend"), ("y", "yank"), ("Esc", "cancel")],
             };
             let mut spans = vec![Span::raw(" ")];
             for (i, (key, desc)) in bindings.iter().enumerate() {
