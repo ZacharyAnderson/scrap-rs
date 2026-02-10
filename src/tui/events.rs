@@ -19,7 +19,7 @@ pub fn handle_key(
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
 ) -> Result<()> {
     // Preview focus is handled regardless of mode
-    if app.focus == Focus::Preview && app.mode == Mode::Normal {
+    if app.focus == Focus::Preview && (app.mode == Mode::Normal || app.mode == Mode::VisualLine) {
         return handle_preview(app, key);
     }
 
@@ -89,42 +89,65 @@ fn clear_summary(app: &mut App) {
 }
 
 fn handle_preview(app: &mut App, key: KeyEvent) -> Result<()> {
-    const HALF_PAGE: u16 = 15;
+    let content_len = app.preview_raw_lines().len();
+    if content_len == 0 {
+        match key.code {
+            KeyCode::Char('q') => app.should_quit = true,
+            KeyCode::Esc => {
+                app.focus = Focus::NoteList;
+                app.preview_cursor = 0;
+                app.preview_scroll = 0;
+                app.pending_g = false;
+            }
+            _ => {}
+        }
+        return Ok(());
+    }
+
+    let half_page = (app.preview_content_height / 2).max(1) as usize;
 
     // Handle 'gg' sequence
     if app.pending_g {
         app.pending_g = false;
         if key.code == KeyCode::Char('g') {
-            app.preview_scroll = 0;
+            app.preview_cursor = 0;
+            ensure_cursor_visible(app);
             return Ok(());
         }
-        // If not 'g', fall through to handle the key normally
     }
 
     match key.code {
         KeyCode::Char('q') => app.should_quit = true,
         KeyCode::Char('j') | KeyCode::Down => {
-            app.preview_scroll = app.preview_scroll.saturating_add(1);
+            app.preview_cursor = (app.preview_cursor + 1).min(content_len.saturating_sub(1));
+            ensure_cursor_visible(app);
         }
         KeyCode::Char('k') | KeyCode::Up => {
-            app.preview_scroll = app.preview_scroll.saturating_sub(1);
+            app.preview_cursor = app.preview_cursor.saturating_sub(1);
+            ensure_cursor_visible(app);
         }
         KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            app.preview_scroll = app.preview_scroll.saturating_add(HALF_PAGE);
+            app.preview_cursor = (app.preview_cursor + half_page).min(content_len.saturating_sub(1));
+            ensure_cursor_visible(app);
         }
         KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            app.preview_scroll = app.preview_scroll.saturating_sub(HALF_PAGE);
+            app.preview_cursor = app.preview_cursor.saturating_sub(half_page);
+            ensure_cursor_visible(app);
         }
         KeyCode::Char('g') => {
             app.pending_g = true;
         }
         KeyCode::Char('G') => {
-            app.preview_scroll = app.preview_content_height.saturating_sub(10);
+            app.preview_cursor = content_len.saturating_sub(1);
+            ensure_cursor_visible(app);
+        }
+        KeyCode::Char('V') => {
+            app.visual_anchor = Some(app.preview_cursor);
+            app.mode = Mode::VisualLine;
         }
         KeyCode::Tab => {
             match app.preview_tab {
                 PreviewTab::Note => {
-                    // Try to load summary from DB if not already in memory
                     if app.summary_content.is_none() {
                         if let Some(note) = app.selected_note() {
                             if let Ok(Some((summary, stale))) = db::get_summary(&app.conn, note.id) {
@@ -137,23 +160,27 @@ fn handle_preview(app: &mut App, key: KeyEvent) -> Result<()> {
                     if app.summary_content.is_some() {
                         app.preview_tab = PreviewTab::Summary;
                         app.preview_scroll = 0;
+                        app.preview_cursor = 0;
                     } else {
                         app.status_message = Some("No summary available. Use :s to generate.".to_string());
                         app.status_expires = Some(Instant::now() + Duration::from_secs(3));
                         app.focus = Focus::NoteList;
                         app.preview_scroll = 0;
+                        app.preview_cursor = 0;
                     }
                 }
                 PreviewTab::Summary => {
                     app.focus = Focus::NoteList;
                     app.preview_tab = PreviewTab::Note;
                     app.preview_scroll = 0;
+                    app.preview_cursor = 0;
                 }
             }
         }
         KeyCode::Esc => {
             app.focus = Focus::NoteList;
             app.preview_scroll = 0;
+            app.preview_cursor = 0;
             app.pending_g = false;
         }
         KeyCode::Char(':') => {
@@ -164,6 +191,23 @@ fn handle_preview(app: &mut App, key: KeyEvent) -> Result<()> {
         _ => {}
     }
     Ok(())
+}
+
+/// Scroll the viewport so the cursor line is visible.
+fn ensure_cursor_visible(app: &mut App) {
+    let scroll = app.preview_scroll as usize;
+    let viewport_height = app.preview_content_height as usize;
+    let scrolloff: usize = 2;
+
+    if viewport_height == 0 {
+        return;
+    }
+
+    if app.preview_cursor < scroll + scrolloff {
+        app.preview_scroll = app.preview_cursor.saturating_sub(scrolloff) as u16;
+    } else if app.preview_cursor >= scroll + viewport_height - scrolloff {
+        app.preview_scroll = (app.preview_cursor + scrolloff + 1).saturating_sub(viewport_height) as u16;
+    }
 }
 
 fn handle_tag_browse(app: &mut App, key: KeyEvent) -> Result<()> {
