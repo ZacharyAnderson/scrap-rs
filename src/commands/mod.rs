@@ -2,6 +2,8 @@ pub mod add;
 pub mod append;
 pub mod delete;
 pub mod edit_tag;
+pub mod export;
+pub mod import;
 pub mod list;
 pub mod open;
 pub mod read;
