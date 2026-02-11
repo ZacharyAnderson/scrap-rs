@@ -108,6 +108,16 @@ echo "content" | scrap write "my note" tag1
 scrap read "my note"
 ```
 
+### Import / Export
+
+Backup and restore notes using JSON format:
+
+```sh
+scrap export backup.json              # Export all notes
+scrap import backup.json              # Import (append only, skip duplicates)
+scrap import backup.json --overwrite  # Import (replace all notes)
+```
+
 ## Summarize Feature
 
 Summarize uses the Anthropic API to generate markdown summaries of your notes. Summaries are cached in the database and marked stale when you edit a note.

@@ -74,6 +74,19 @@ enum Commands {
         /// Name of the note
         name: String,
     },
+    /// Export all notes to a SQL file
+    Export {
+        /// Output file path
+        path: String,
+    },
+    /// Import notes from a SQL file
+    Import {
+        /// Input file path
+        path: String,
+        /// Overwrite all existing notes (default: append only)
+        #[arg(long)]
+        overwrite: bool,
+    },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -98,5 +111,7 @@ fn main() -> anyhow::Result<()> {
         Some(Commands::Read { name }) => commands::read::run(&name),
         Some(Commands::List { tag }) => commands::list::run(tag.as_deref()),
         Some(Commands::Append { name }) => commands::append::run(&name),
+        Some(Commands::Export { path }) => commands::export::run(&path),
+        Some(Commands::Import { path, overwrite }) => commands::import::run(&path, overwrite),
     }
 }
