@@ -3,7 +3,7 @@ use ratatui::{
     widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
 };
 
-use super::{markdown, App, Focus, Mode, PreviewTab};
+use super::{App, Focus, Mode, PreviewTab};
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
@@ -148,7 +148,7 @@ fn draw_preview(f: &mut Frame, app: &mut App, area: Rect) {
                 format!("{} [{}]", note_title, tab_label)
             };
             let lines = match &app.summary_content {
-                Some(content) => markdown::render_markdown(content),
+                Some(content) => tui_md::render(content),
                 None => vec![Line::from("Generating summary...")],
             };
             let border = if is_focused {
@@ -163,7 +163,7 @@ fn draw_preview(f: &mut Frame, app: &mut App, area: Rect) {
         _ => {
             let (title, lines) = match app.selected_note() {
                 Some(note) => {
-                    let rendered = markdown::render_markdown(&note.note);
+                    let rendered = tui_md::render(&note.note);
                     (format!("{} [{}]", note.title, tab_label), rendered)
                 }
                 None => ("Preview".to_string(), vec![Line::from("No note selected")]),
