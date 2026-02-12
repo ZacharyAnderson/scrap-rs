@@ -1,5 +1,5 @@
 mod events;
-mod markdown;
+
 mod ui;
 
 use std::time::Instant;
