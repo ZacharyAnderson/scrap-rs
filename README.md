@@ -134,3 +134,25 @@ In the TUI, press `:s` on a selected note to generate or view a summary.
 ## Data
 
 Notes are stored in a SQLite database at `~/.scrap/scrap.db`.
+
+## Releasing
+
+To publish a new version to Homebrew:
+
+1. Update the version in `Cargo.toml`
+2. Commit the change:
+   ```sh
+   git add Cargo.toml
+   git commit -m "chore: bump version to X.Y.Z"
+   ```
+3. Create and push a tag:
+   ```sh
+   git tag vX.Y.Z
+   git push origin master --tags
+   ```
+4. The [homebrew-scrap](https://github.com/ZacharyAnderson/homebrew-scrap) repository has a GitHub Action that polls for new tags hourly and automatically updates the formula. You can also trigger it manually from the Actions tab.
+
+Users can then update via:
+```sh
+brew update && brew upgrade scrap
+```
